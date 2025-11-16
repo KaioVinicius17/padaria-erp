@@ -1,176 +1,173 @@
 // src/components/requisicoes/RequisicaoList.jsx
-// (ATUALIZADO: Adicionado botão "Visualizar")
-
-import * as React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
-import { 
-    Box, Table, TableBody, TableCell, TableContainer, TableHead, 
-    TablePagination, TableRow, Paper, IconButton, Menu, MenuItem, 
-    ListItemIcon, Chip, Typography 
+import {
+  Box,
+  IconButton,
+  Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon
 } from '@mui/material';
-import { MoreVertical, Edit, Trash2, CheckCircle, XCircle, Eye } from 'lucide-react'; // 1. Ícone Eye
-
-const headCells = [
-  { id: 'id', numeric: false, label: 'ID' },
-  { id: 'status', numeric: false, label: 'Status' },
-  { id: 'itens', numeric: true, label: 'Itens' },
-  { id: 'data_criacao', numeric: false, label: 'Data' },
-  { id: 'actions', numeric: true, label: 'Ações' },
-];
+import {
+  MoreVertical,
+  Edit,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Eye
+} from 'lucide-react';
+import AdvancedTable from '../common/AdvancedTable';
 
 const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString('pt-BR');
 };
 
-function EnhancedTableHead() {
-  return (
-    <TableHead>
-      <TableRow sx={{ '& > th': { fontWeight: 'bold' } }}>
-        {headCells.map((headCell) => (
-          <TableCell key={headCell.id} align={headCell.numeric ? 'right' : 'left'}>
-            {headCell.label}
-          </TableCell>
-        ))}
-      </TableRow>
-    </TableHead>
-  );
-}
-
-// 2. RECEBE A NOVA PROP
-export default function RequisicaoList({ requisicoes, onEdit, onAprovar, onCancelar, onViewDetails }) {
-  const [page, setPage] = React.useState(0);
-  const [rowsPerPage, setRowsPerPage] = React.useState(10);
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const [selectedItem, setSelectedItem] = React.useState(null);
-
-  const handleClick = (event, item) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedItem(item);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-    setSelectedItem(null);
-  };
-
-  const handleEdit = () => {
-    onEdit(selectedItem);
-    handleClose();
-  };
-
-  const handleAprovar = () => {
-    onAprovar(selectedItem.id);
-    handleClose();
-  };
+// Lógica de Ações (Menu)
+const ActionsCell = ({ row, onEdit, onAprovar, onCancelar, onViewDetails }) => {
+    const [anchorEl, setAnchorEl] = useState(null);
+    const openMenu = Boolean(anchorEl);
   
-  const handleCancelar = () => {
-    onCancelar(selectedItem.id, selectedItem.status);
-    handleClose();
-  };
+    const handleMenuClick = (event) => {
+      setAnchorEl(event.currentTarget);
+    };
   
-  // 3. HANDLER para o novo botão
-  const handleView = () => {
-    onViewDetails(selectedItem.id);
-    handleClose();
-  };
+    const handleMenuClose = () => {
+      setAnchorEl(null);
+    };
 
-  const handleChangePage = (event, newPage) => setPage(newPage);
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+    const handleEdit = () => {
+        onEdit(row);
+        handleMenuClose();
+    };
 
-  const visibleRows = React.useMemo(() =>
-    (requisicoes || []).slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [requisicoes, page, rowsPerPage],
-  );
+    const handleAprovar = () => {
+        onAprovar(row.id);
+        handleMenuClose();
+    };
 
-  return (
-    <Box sx={{ width: '100%' }}>
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <TableContainer>
-          <Table sx={{ minWidth: 750 }}>
-            <EnhancedTableHead />
-            <TableBody>
-              {visibleRows.map((row) => (
-                <TableRow 
-                  hover 
-                  tabIndex={-1} 
-                  key={row.id}
-                  sx={{ 
-                    opacity: row.status === 'Cancelada' ? 0.5 : 1,
-                    backgroundColor: row.status === 'Cancelada' ? 'action.hover' : 'transparent'
-                  }}
-                >
-                  <TableCell>#{row.id}</TableCell>
-                  <TableCell>
-                    <Chip 
-                      label={row.status}
-                      color={
-                        row.status === 'Aberta' ? 'warning' :
-                        row.status === 'Aprovada' ? 'success' :
-                        'default'
-                      }
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="right">{row.total_itens}</TableCell>
-                  <TableCell>{formatDate(row.data_criacao)}</TableCell>
-                  <TableCell align="right">
-                    <IconButton onClick={(e) => handleClick(e, row)}>
-                      <MoreVertical size={20} />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={requisicoes.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Linhas por página:"
-        />
-      </Paper>
-      
-      {/* Menu de Ações */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleClose}
-      >
-        {/* 4. NOVO BOTÃO DE MENU */}
-        <MenuItem onClick={handleView}>
-          <ListItemIcon><Eye size={20} /></ListItemIcon>
-          Visualizar Documento
-        </MenuItem>
+    const handleCancelar = () => {
+        onCancelar(row.id, row.status);
+        handleMenuClose();
+    };
 
-        {selectedItem?.status === 'Aberta' && (
-          <MenuItem onClick={handleEdit}>
-            <ListItemIcon><Edit size={20} /></ListItemIcon>
-            Editar Itens
-          </MenuItem>
-        )}
-        {selectedItem?.status === 'Aberta' && (
-          <MenuItem onClick={handleAprovar} sx={{ color: 'success.main' }}>
-            <ListItemIcon sx={{ color: 'success.main' }}><CheckCircle size={20} /></ListItemIcon>
-            Aprovar
-          </MenuItem>
-        )}
-        {(selectedItem?.status === 'Aberta' || selectedItem?.status === 'Aprovada') && (
-            <MenuItem onClick={handleCancelar} sx={{ color: 'error.main' }}>
-            <ListItemIcon sx={{ color: 'error.main' }}><XCircle size={20} /></ListItemIcon>
-            {selectedItem?.status === 'Aprovada' ? 'Rejeitar' : 'Cancelar'}
+    const handleView = () => {
+        onViewDetails(row.id);
+        handleMenuClose();
+    };
+
+    return (
+      <Box>
+        <IconButton
+          aria-label="ações"
+          onClick={handleMenuClick}
+        >
+          <MoreVertical size={20} />
+        </IconButton>
+        <Menu
+            anchorEl={anchorEl}
+            open={openMenu}
+            onClose={handleMenuClose}
+        >
+            <MenuItem onClick={handleView}>
+                <ListItemIcon><Eye size={20} /></ListItemIcon>
+                Visualizar Documento
             </MenuItem>
-        )}
-      </Menu>
-    </Box>
+
+            {row.status === 'Aberta' && (
+                <MenuItem onClick={handleEdit}>
+                    <ListItemIcon><Edit size={20} /></ListItemIcon>
+                    Editar Itens
+                </MenuItem>
+            )}
+            {row.status === 'Aberta' && (
+                <MenuItem onClick={handleAprovar} sx={{ color: 'success.main' }}>
+                    <ListItemIcon sx={{ color: 'success.main' }}><CheckCircle size={20} /></ListItemIcon>
+                    Aprovar
+                </MenuItem>
+            )}
+            {(row.status === 'Aberta' || row.status === 'Aprovada') && (
+                <MenuItem onClick={handleCancelar} sx={{ color: 'error.main' }}>
+                    <ListItemIcon sx={{ color: 'error.main' }}><XCircle size={20} /></ListItemIcon>
+                    {row.status === 'Aprovada' ? 'Rejeitar' : 'Cancelar'}
+                </MenuItem>
+            )}
+        </Menu>
+      </Box>
+    );
+};
+
+ActionsCell.propTypes = {
+    row: PropTypes.object.isRequired,
+    onEdit: PropTypes.func.isRequired,
+    onAprovar: PropTypes.func.isRequired,
+    onCancelar: PropTypes.func.isRequired,
+    onViewDetails: PropTypes.func.isRequired,
+};
+
+export default function RequisicaoList({ requisicoes, onEdit, onAprovar, onCancelar, onViewDetails, loading }) {
+
+  const columns = [
+    {
+      field: 'id',
+      headerName: 'ID',
+      width: 90,
+      renderCell: (params) => `#${params.value}`
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 150,
+      renderCell: (params) => (
+        <Chip
+          label={params.value}
+          color={
+            params.value === 'Aberta' ? 'warning' :
+            params.value === 'Aprovada' ? 'success' :
+            'default'
+          }
+          size="small"
+        />
+      )
+    },
+    {
+      field: 'total_itens',
+      headerName: 'Itens',
+      type: 'number',
+      width: 100,
+      align: 'right',
+      headerAlign: 'right',
+    },
+    {
+      field: 'data_criacao',
+      headerName: 'Data',
+      width: 200,
+      valueFormatter: (params) => formatDate(params.value)
+    },
+    {
+      field: 'actions',
+      headerName: 'Ações',
+      width: 100,
+      align: 'center',
+      headerAlign: 'center',
+      sortable: false,
+      renderCell: (params) => <ActionsCell
+                                row={params.row}
+                                onEdit={onEdit}
+                                onAprovar={onAprovar}
+                                onCancelar={onCancelar}
+                                onViewDetails={onViewDetails}
+                                />,
+    },
+  ];
+
+  return (
+    <AdvancedTable
+      rows={requisicoes}
+      columns={columns}
+      loading={loading}
+    />
   );
 }
 
@@ -179,5 +176,6 @@ RequisicaoList.propTypes = {
   onEdit: PropTypes.func.isRequired,
   onAprovar: PropTypes.func.isRequired,
   onCancelar: PropTypes.func.isRequired,
-  onViewDetails: PropTypes.func.isRequired, // 5. NOVA PROP
+  onViewDetails: PropTypes.func.isRequired,
+  loading: PropTypes.bool,
 };

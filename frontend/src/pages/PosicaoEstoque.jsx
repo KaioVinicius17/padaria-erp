@@ -1,14 +1,12 @@
 // src/pages/PosicaoEstoque.jsx
-// (Este é o seu antigo 'Almoxarifados.jsx', agora focado na posição)
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
-    Box, Typography, Button, Paper, Grid,
-    Table, TableBody, TableCell, TableContainer, TableHead, TableRow, CircularProgress
+    Box, Typography, Button, Paper
 } from '@mui/material';
 import { MoveRight } from 'lucide-react';
-import TransferenciaForm from '../components/almoxarifados/TransferenciaForm'; 
+import TransferenciaForm from '../components/almoxarifados/TransferenciaForm';
+import AdvancedTable from '../components/common/AdvancedTable';
 
 const PRODUTOS_SERVICE_URL = 'http://localhost:3003';
 
@@ -28,7 +26,7 @@ export default function PosicaoEstoque() {
         axios.get(`${PRODUTOS_SERVICE_URL}/produtos/gerenciamento`)
       ]);
       
-      setEstoque(resEstoque.data);
+      setEstoque(resEstoque.data.map((item, index) => ({ ...item, id: index }))); // Adiciona um ID único
       setAlmoxarifados(resAlmox.data);
       setProdutos(resProd.data);
     } catch (error) {
@@ -49,6 +47,30 @@ export default function PosicaoEstoque() {
     handleCloseModal();
     fetchData(); // Atualiza a tabela
   };
+
+  const columns = [
+    {
+      field: 'nome_item',
+      headerName: 'Produto',
+      flex: 1,
+      minWidth: 200,
+    },
+    {
+      field: 'nome_almoxarifado',
+      headerName: 'Almoxarifado',
+      flex: 1,
+      minWidth: 200,
+    },
+    {
+      field: 'quantidade',
+      headerName: 'Quantidade',
+      type: 'number',
+      width: 180,
+      align: 'right',
+      headerAlign: 'right',
+      valueGetter: (params) => `${params.row.quantidade} ${params.row.unidade_medida}`,
+    }
+  ];
 
   return (
     <Box>
@@ -74,30 +96,11 @@ export default function PosicaoEstoque() {
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Produto</TableCell>
-              <TableCell>Almoxarifado</TableCell>
-              <TableCell align="right">Quantidade</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={3} align="center"><CircularProgress /></TableCell></TableRow>
-            ) : (
-              estoque.map((item, index) => (
-                <TableRow key={index}>
-                  <TableCell>{item.nome_item}</TableCell>
-                  <TableCell>{item.nome_almoxarifado}</TableCell>
-                  <TableCell align="right">{item.quantidade} {item.unidade_medida}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <AdvancedTable
+        rows={estoque}
+        columns={columns}
+        loading={loading}
+      />
     </Box>
   );
 }
