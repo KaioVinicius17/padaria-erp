@@ -1,14 +1,14 @@
 // src/pages/Requisicoes.jsx
-// (ATUALIZADO: Com o novo modal de "Visualizar")
+// (ATUALIZADO: Com "Empty State")
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Box, Typography, Paper, CircularProgress, Button } from '@mui/material';
-import { FileText } from 'lucide-react';
+import { FileText } from 'lucide-react'; // Ícone reutilizado
 import RequisicaoList from '../components/requisicoes/RequisicaoList';
 import RequisicaoForm from '../components/requisicoes/RequisicaoForm'; 
 import ConfirmationDialog from '../components/common/ConfirmationDialog';
-import RequisicaoDetails from '../components/requisicoes/RequisicaoDetails'; // 1. IMPORTAR
+import RequisicaoDetails from '../components/requisicoes/RequisicaoDetails';
 
 const REQUISICOES_SERVICE_URL = 'http://localhost:3005';
 const PRODUTOS_SERVICE_URL = 'http://localhost:3003';
@@ -17,11 +17,9 @@ export default function Requisicoes() {
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // --- Estados para os modais ---
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [requisicaoToEdit, setRequisicaoToEdit] = useState(null);
   
-  // 2. NOVOS ESTADOS para o modal de Detalhes
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [requisicaoToView, setRequisicaoToView] = useState(null);
 
@@ -56,7 +54,6 @@ export default function Requisicoes() {
     fetchData();
   }, []);
 
-  // --- Handlers do Form (Novo/Editar) ---
   const handleOpenForm = (item = null) => {
     setRequisicaoToEdit(item);
     setIsFormOpen(true);
@@ -73,7 +70,6 @@ export default function Requisicoes() {
     handleCloseForm();
   };
 
-  // --- 3. NOVOS HANDLERS para o modal de Detalhes ---
   const handleOpenDetails = (id) => {
     setRequisicaoToView(id);
     setIsDetailsOpen(true);
@@ -82,9 +78,7 @@ export default function Requisicoes() {
     setRequisicaoToView(null);
     setIsDetailsOpen(false);
   };
-  // ------------------------------------------------
 
-  // --- Lógica de Ações de Status (Aprovar, Cancelar) ---
   const openConfirmDialog = (action, payload, title, message) => {
     setConfirmAction(action);
     setConfirmPayload(payload);
@@ -134,10 +128,49 @@ export default function Requisicoes() {
     }
   };
 
+  // ==========================================================
+  // FUNÇÃO DE RENDERIZAÇÃO (Empty State)
+  // ==========================================================
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+          <CircularProgress />
+        </Paper>
+      );
+    }
+
+    if (requisicoes.length === 0) {
+      return (
+        <Paper 
+          sx={{ textAlign: 'center', p: 4, mt: 2, backgroundColor: 'action.hover' }}
+          variant="outlined"
+        >
+          <FileText size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            Nenhuma requisição encontrada
+          </Typography>
+          <Typography color="text.secondary">
+            Clique em "Nova Requisição" para solicitar materiais.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <RequisicaoList 
+          requisicoes={requisicoes}
+          onEdit={handleOpenForm}
+          onAprovar={handleAprovar}
+          onCancelar={handleCancelar}
+          onViewDetails={handleOpenDetails}
+      />
+    );
+  };
+  // ==========================================================
 
   return (
     <Box>
-      {/* Modal de Criar/Editar */}
       <RequisicaoForm
         open={isFormOpen}
         onClose={handleCloseForm}
@@ -147,7 +180,6 @@ export default function Requisicoes() {
         produtos={produtos}
       />
       
-      {/* 4. RENDERIZA O NOVO MODAL */}
       <RequisicaoDetails
         open={isDetailsOpen}
         onClose={handleCloseDetails}
@@ -176,19 +208,7 @@ export default function Requisicoes() {
         </Button>
       </Box>
 
-      {loading ? (
-        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Paper>
-      ) : (
-        <RequisicaoList 
-            requisicoes={requisicoes}
-            onEdit={handleOpenForm}
-            onAprovar={handleAprovar}
-            onCancelar={handleCancelar}
-            onViewDetails={handleOpenDetails} // 5. PASSA A FUNÇÃO
-        />
-      )}
+      {renderContent()}
     </Box>
   );
 }

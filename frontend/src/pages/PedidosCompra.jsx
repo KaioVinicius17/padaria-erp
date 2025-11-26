@@ -1,15 +1,15 @@
 // src/pages/PedidosCompra.jsx
-// (ATUALIZADO: Passando 'almoxarifados' e 'fornecedores' para o PedidoDetails)
+// (ATUALIZADO: Com "Empty State")
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, Typography, Paper, CircularProgress, Button } from '@mui/material';
-import { ClipboardCheck } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react'; // Ícone reutilizado
 import PedidoList from '../components/pedidos/PedidoList';
 import PedidoForm from '../components/pedidos/PedidoForm'; 
 import ConfirmationDialog from '../components/common/ConfirmationDialog';
-import PedidoDetails from '../components/pedidos/PedidoDetails'; // Importado
+import PedidoDetails from '../components/pedidos/PedidoDetails';
 
 const PEDIDOS_SERVICE_URL = 'http://localhost:3006';
 const PRODUTOS_SERVICE_URL = 'http://localhost:3003';
@@ -59,14 +59,14 @@ export default function PedidosCompra() {
         almoxarifadosData = resAlmox.data || [];
       } catch (error) {
         console.error("Erro CRÍTICO ao buscar dados para o modal:", error);
-        alert("Erro ao carregar dados essenciais (Produtos, Fornecedores, Almoxarifados). Verifique os serviços.");
+        // Não bloqueia a página, mas avisa se necessário
       }
 
       try {
         const resPed = await axios.get(`${PEDIDOS_SERVICE_URL}/pedidos`);
         pedidosData = resPed.data || [];
       } catch (error) {
-        console.error("Erro ao buscar histórico de pedidos (Serviço 3006):", error);
+        console.error("Erro ao buscar histórico de pedidos:", error);
         pedidosData = [];
       }
       
@@ -85,7 +85,7 @@ export default function PedidosCompra() {
   useEffect(() => {
     fetchData();
     if (requisicaoParaConverter) {
-      setIsModalOpen(true);
+      setIsFormOpen(true);
     }
   }, [requisicaoParaConverter]);
 
@@ -170,6 +170,47 @@ export default function PedidosCompra() {
     }
   };
 
+  // ==========================================================
+  // FUNÇÃO DE RENDERIZAÇÃO (Empty State)
+  // ==========================================================
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+          <CircularProgress />
+        </Paper>
+      );
+    }
+
+    if (pedidos.length === 0) {
+      return (
+        <Paper 
+          sx={{ textAlign: 'center', p: 4, mt: 2, backgroundColor: 'action.hover' }}
+          variant="outlined"
+        >
+          <ClipboardCheck size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            Nenhum pedido de compra registrado
+          </Typography>
+          <Typography color="text.secondary">
+            Clique em "Novo Pedido" para iniciar um processo de compra.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <PedidoList 
+          pedidos={pedidos}
+          onEdit={handleOpenForm}
+          onSend={handleSend}
+          onCancel={handleCancel}
+          onViewDetails={handleOpenDetails}
+          onConfirmar={handleConfirmar}
+      />
+    );
+  };
+  // ==========================================================
 
   return (
     <Box>
@@ -185,9 +226,6 @@ export default function PedidosCompra() {
         almoxarifados={almoxarifados}
       />
       
-      {/* ==========================================================
-          CORREÇÃO AQUI: Passando as listas para o modal de Detalhes
-         ========================================================== */}
       <PedidoDetails
         open={isDetailsOpen}
         onClose={handleCloseDetails}
@@ -195,7 +233,6 @@ export default function PedidosCompra() {
         almoxarifados={almoxarifados} 
         fornecedores={fornecedores}
       />
-      {/* ========================================================== */}
       
       <ConfirmationDialog
         open={isConfirmOpen}
@@ -219,20 +256,7 @@ export default function PedidosCompra() {
         </Button>
       </Box>
 
-      {loading ? (
-        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Paper>
-      ) : (
-        <PedidoList 
-            pedidos={pedidos}
-            onEdit={handleOpenForm}
-            onSend={handleSend}
-            onCancel={handleCancel}
-            onViewDetails={handleOpenDetails}
-            onConfirmar={handleConfirmar}
-        />
-      )}
+      {renderContent()}
     </Box>
   );
 }

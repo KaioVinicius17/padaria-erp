@@ -200,13 +200,9 @@ app.delete('/produtos/:id', async (req, res) => {
     }
 });
 
-// --- ROTAS DE CATEGORIAS ---
-
-// ROTA: LISTAR TODAS AS CATEGORIAS (para Gerenciamento)
-// Agora busca TODOS (Ativos e Inativos) e CONTA os produtos vinculados
+// --- ROTAS DE CATEGORIAS (ATUALIZADAS PARA SUPORTAR ÍCONE) ---
 app.get('/categorias', async (req, res) => {
     try {
-        // Query para contar produtos vinculados
         const query = `
             SELECT 
                 c.*, 
@@ -228,15 +224,14 @@ app.get('/categorias', async (req, res) => {
     }
 });
 
-// ROTA: CRIAR NOVA CATEGORIA (Atualizada com status)
 app.post('/categorias', async (req, res) => {
-    const { nome, tipo_item, status } = req.body;
+    const { nome, tipo_item, status, icon } = req.body; // Recebe o ícone
     if (!nome) {
         return res.status(400).json({ message: 'O nome da categoria é obrigatório.' });
     }
     try {
-        const query = "INSERT INTO categorias (nome, tipo_item, status) VALUES ($1, $2, $3) RETURNING *";
-        const result = await pool.query(query, [nome, tipo_item || null, status || 'Ativo']);
+        const query = "INSERT INTO categorias (nome, tipo_item, status, icon) VALUES ($1, $2, $3, $4) RETURNING *";
+        const result = await pool.query(query, [nome, tipo_item || null, status || 'Ativo', icon || null]);
         res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('Erro ao criar categoria:', err.message);
@@ -244,16 +239,15 @@ app.post('/categorias', async (req, res) => {
     }
 });
 
-// ROTA: ATUALIZAR CATEGORIA (Atualizada com status)
 app.put('/categorias/:id', async (req, res) => {
     const { id } = req.params;
-    const { nome, tipo_item, status } = req.body;
+    const { nome, tipo_item, status, icon } = req.body; // Recebe o ícone
     if (!nome) {
         return res.status(400).json({ message: 'O nome da categoria é obrigatório.' });
     }
     try {
-        const query = "UPDATE categorias SET nome = $1, tipo_item = $2, status = $3 WHERE id = $4 RETURNING *";
-        const result = await pool.query(query, [nome, tipo_item || null, status || 'Ativo', id]);
+        const query = "UPDATE categorias SET nome = $1, tipo_item = $2, status = $3, icon = $4 WHERE id = $5 RETURNING *";
+        const result = await pool.query(query, [nome, tipo_item || null, status || 'Ativo', icon || null, id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Categoria não encontrada.' });
         }

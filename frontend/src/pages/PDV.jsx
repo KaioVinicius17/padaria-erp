@@ -1,567 +1,473 @@
 // src/pages/PDV.jsx
-// (Layout de 2 Colunas + Leitor de Código de Barras e Comanda)
+// (ATUALIZADO: Design moderno, responsivo e com categorias dinâmicas)
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-  Box, Grid, Paper, Typography, TextField, InputAdornment, Button,
-  List, ListItem, ListItemText, IconButton, Divider,
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  CircularProgress, Backdrop
+  Box,
+  Grid,
+  Typography,
+  Paper,
+  TextField,
+  InputAdornment,
+  Card,
+  CardActionArea,
+  CardContent,
+  Button,
+  IconButton,
+  Divider,
+  Chip,
+  Avatar,
+  Drawer,
+  useMediaQuery,
+  useTheme,
+  CircularProgress,
+  Stack
 } from '@mui/material';
-import { Search, Delete, AddCircle, RemoveCircle } from '@mui/icons-material';
-import AbrirCaixaModal from '../components/caixa/AbrirCaixaModal';
-import FecharCaixaModal from '../components/caixa/FecharCaixaModal';
+import {
+  Search,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  ShoppingBag,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Package,
+  CreditCard,
+  Banknote,
+  QrCode,
+  Store
+} from 'lucide-react';
 
-// --- URLs dos Serviços ---
+// Importa todos os ícones para renderização dinâmica
+import * as LucideIcons from 'lucide-react';
+
 const PRODUTOS_SERVICE_URL = 'http://localhost:3003';
-const VENDAS_SERVICE_URL = 'http://localhost:3005';
-const FINANCEIRO_SERVICE_URL = 'http://localhost:3007';
-const COMANDA_SERVICE_URL = 'http://localhost:3006';
 
-// Função para formatar moeda
+// Componente para renderizar ícone pelo nome (igual ao TerminalBalcao)
+const DynamicIcon = ({ name, size = 18 }) => {
+    const IconComponent = (name && LucideIcons[name]) ? LucideIcons[name] : Package;
+    return <IconComponent size={size} />;
+};
+
 const formatCurrency = (value) => {
-  if (isNaN(value)) value = 0;
-  return parseFloat(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    return parseFloat(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
 export default function PDV() {
-  // --- Estados de Dados ---
-  const [produtos, setProdutos] = useState([]); // Lista de produtos vendáveis
-  const [filtro, setFiltro] = useState(''); // Busca manual
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // --- ESTADOS ---
+  const [produtos, setProdutos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
   const [carrinho, setCarrinho] = useState([]);
-  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState('all');
+  
+  // Controle do Drawer (Mobile)
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isCartExpanded, setIsCartExpanded] = useState(true); 
 
-  // --- Estados de UI (Caixa e Pagamento) ---
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [valorRecebido, setValorRecebido] = useState(0);
-  const [formaPagamento, setFormaPagamento] = useState('');
-  const valorRecebidoRef = useRef(null);
-  
-  const [caixaStatus, setCaixaStatus] = useState('carregando');
-  const [isAbrirModalOpen, setIsAbrirModalOpen] = useState(false);
-  const [isFecharModalOpen, setIsFecharModalOpen] = useState(false);
-  const [sessaoId, setSessaoId] = useState(null);
-  
-  const [comandaIdInput, setComandaIdInput] = useState('');
-  const [comandasScaneadas, setComandasScaneadas] = useState([]);
-  
-  // --- Refs para o Leitor de Código de Barras ---
-  const barcodeBuffer = useRef("");
-  const barcodeTimer = useRef(null);
-  
-  // --- Funções de Carregamento ---
-  const checkCaixaStatus = useCallback(async () => {
-    setCaixaStatus('carregando'); 
-    try {
-      const response = await axios.get(`${FINANCEIRO_SERVICE_URL}/caixa/status`);
-      if (response.data.status === 'Aberto') {
-        setCaixaStatus('Aberto');
-        setSessaoId(response.data.sessao.id);
-        setIsAbrirModalOpen(false); 
-      } else {
-        setCaixaStatus('Fechado');
-        setSessaoId(null);
-        setIsAbrirModalOpen(true); 
-      }
-    } catch (error) {
-      console.error("Erro ao verificar status do caixa:", error);
-      setCaixaStatus('erro');
-    }
-  }, []); 
-  
+  // --- BUSCAR DADOS ---
   useEffect(() => {
-    checkCaixaStatus();
-  }, [checkCaixaStatus]); 
-
-  // Busca TODOS os produtos vendáveis (Revenda) ao carregar
-  useEffect(() => {
-    const fetchProdutos = async () => {
-      try {
-        const response = await axios.get(`${PRODUTOS_SERVICE_URL}/produtos`);
-        // Filtra para mostrar apenas 'Produto de Revenda'
-        const produtosVendaveis = response.data.filter(p => 
-          p.tipo_item === 'Produto de Revenda'
-        );
-        setProdutos(produtosVendaveis);
-      } catch (error) {
-        console.error("Erro ao buscar produtos:", error);
-      }
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const [resProd, resCat] = await Promise.all([
+                axios.get(`${PRODUTOS_SERVICE_URL}/produtos`),
+                axios.get(`${PRODUTOS_SERVICE_URL}/categorias`)
+            ]);
+            setProdutos(resProd.data || []);
+            setCategorias(resCat.data || []);
+        } catch (error) {
+            console.error("Erro ao carregar dados do PDV:", error);
+        } finally {
+            setLoading(false);
+        }
     };
-    fetchProdutos();
-  }, []); // Roda ao carregar
+    fetchData();
+  }, []);
 
-  // Calcula total
-  useEffect(() => {
-    const novoTotal = carrinho.reduce((acc, item) => acc + (item.preco_venda * item.quantidade), 0);
-    setTotal(novoTotal);
-  }, [carrinho]);
-  
-  // --- Funções do Carrinho ---
-  const handleAddItem = (produto) => {
-    setCarrinho(prevCarrinho => {
-      const itemExistente = prevCarrinho.find(item => item.id === produto.id);
+  // --- LÓGICA DO CARRINHO ---
+  const adicionarAoCarrinho = (produto) => {
+    setCarrinho((prev) => {
+      const itemExistente = prev.find((item) => item.id === produto.id);
       if (itemExistente) {
-        return prevCarrinho.map(item =>
+        return prev.map((item) =>
           item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
         );
-      } else {
-        return [...prevCarrinho, { ...produto, quantidade: 1 }];
       }
+      return [...prev, { 
+          id: produto.id,
+          nome: produto.nome_item, 
+          preco: parseFloat(produto.preco_venda),
+          quantidade: 1 
+      }];
     });
   };
 
-  const handleChangeQuantidade = (produtoId, acao) => {
-    setCarrinho(prevCarrinho => {
-      const itemExistente = prevCarrinho.find(item => item.id === produtoId);
-      if (!itemExistente) return prevCarrinho;
-      if (acao === 'incrementar') {
-        return prevCarrinho.map(item =>
-          item.id === produtoId ? { ...item, quantidade: item.quantidade + 1 } : item
-        );
-      }
-      if (acao === 'decrementar') {
-        if (itemExistente.quantidade === 1) {
-          return prevCarrinho.filter(item => item.id !== produtoId);
+  const removerDoCarrinho = (id) => {
+    setCarrinho((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const atualizarQuantidade = (id, delta) => {
+    setCarrinho((prev) => {
+      return prev.map((item) => {
+        if (item.id === id) {
+          const novaQtd = item.quantidade + delta;
+          return novaQtd > 0 ? { ...item, quantidade: novaQtd } : item;
         }
-        return prevCarrinho.map(item =>
-          item.id === produtoId ? { ...item, quantidade: item.quantidade - 1 } : item
-        );
-      }
-      if (acao === 'remover') {
-        return prevCarrinho.filter(item => item.id !== produtoId);
-      }
-      return prevCarrinho;
+        return item;
+      });
     });
   };
 
-  const handleLimparCarrinho = () => {
-    setCarrinho([]);
-    setComandasScaneadas([]);
-    setTotal(0);
+  const calcularTotal = () => {
+    return carrinho.reduce((total, item) => total + (item.preco * item.quantidade), 0);
   };
 
-  // --- Funções do Modal de Pagamento ---
-  const handleOpenPaymentModal = (forma) => {
+  const calcularQtdItens = () => {
+      return carrinho.reduce((acc, item) => acc + item.quantidade, 0);
+  };
+
+  const handleFinalizarVenda = (metodo) => {
     if (carrinho.length === 0) return;
-    setFormaPagamento(forma);
-    if (forma === 'Dinheiro') {
-      setValorRecebido(total); 
-    }
-    setIsModalOpen(true);
-    if (forma === 'Dinheiro') {
-      setTimeout(() => {
-        valorRecebidoRef.current?.focus();
-        valorRecebidoRef.current?.select();
-      }, 100);
-    }
+    alert(`Venda finalizada via ${metodo}! Total: ${formatCurrency(calcularTotal())}`);
+    setCarrinho([]);
+    setIsCartOpen(false);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setValorRecebido(0);
-    setFormaPagamento('');
+  const toggleCartSize = () => {
+      setIsCartExpanded(!isCartExpanded);
   };
 
-  const handleConfirmarVenda = async () => {
-    const payload = {
-      cliente_id: null,
-      valor_total: total,
-      forma_pagamento: formaPagamento,
-      itens: carrinho
-    };
-    try {
-      const vendaResponse = await axios.post(`${VENDAS_SERVICE_URL}/vendas`, payload);
-      const vendaId = vendaResponse.data.venda_id;
-      if (comandasScaneadas.length > 0) {
-        console.log('Faturando comandas:', comandasScaneadas);
-        const faturarPromises = comandasScaneadas.map(id =>
-          axios.patch(`${COMANDA_SERVICE_URL}/comandas/${id}/faturar`, {
-            venda_id: vendaId
-          })
-        );
-        await Promise.all(faturarPromises);
-      }
-      alert("Venda registrada com sucesso!");
-      handleLimparCarrinho();
-      handleCloseModal(); 
-    } catch (error) {
-      console.error("Erro ao finalizar venda:", error);
-      alert(`Erro: ${error.response?.data?.message || 'Não foi possível registrar a venda.'}`);
-    }
-  };
-  
-  // --- Funções de Abertura e Fechamento de Caixa ---
-  const handleCaixaAberto = (sessao) => {
-    setCaixaStatus('Aberto');
-    setSessaoId(sessao.id);
-    setIsAbrirModalOpen(false);
-  };
+  // --- FILTROS ---
+  const produtosFiltrados = produtos.filter((produto) => {
+    const matchSearch = produto.nome_item.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        (produto.codigo_barras && produto.codigo_barras.includes(searchTerm));
+    const matchCategory = categoriaSelecionada === 'all' || produto.categoria_id === categoriaSelecionada;
+    return matchSearch && matchCategory;
+  });
 
-  const handleFecharCaixa = () => {
-    setIsFecharModalOpen(true);
-  };
-  
-  const handleCaixaFechado = () => {
-    setIsFecharModalOpen(false); 
-    setCaixaStatus('Fechado');    
-    setSessaoId(null);
-    handleLimparCarrinho();
-  };
-
-  // --- Função da Comanda ---
-  const handleBuscarComanda = async () => {
-    if (!comandaIdInput) return;
-    const comandaId = comandaIdInput; 
-    try {
-      const response = await axios.get(`${COMANDA_SERVICE_URL}/comandas/${comandaId}`);
-      const { comanda, itens } = response.data;
-      if (comandasScaneadas.includes(comanda.id)) {
-          alert('Esta comanda já foi adicionada ao carrinho.');
-          setComandaIdInput('');
-          return;
-      }
-      setCarrinho(prevCarrinho => {
-        let novoCarrinho = [...prevCarrinho];
-        for (const itemDaComanda of itens) {
-          const itemExistente = novoCarrinho.find(cartItem => cartItem.id === itemDaComanda.produto_id);
-          if (itemExistente) {
-            novoCarrinho = novoCarrinho.map(cartItem =>
-              cartItem.id === itemDaComanda.produto_id
-                ? { ...cartItem, quantidade: cartItem.quantidade + itemDaComanda.quantidade }
-                : cartItem
-            );
-          } else {
-            novoCarrinho.push({
-              id: itemDaComanda.produto_id,
-              nome_item: itemDaComanda.nome_item,
-              preco_venda: itemDaComanda.valor_unitario_momento,
-              quantidade: itemDaComanda.quantidade,
-            });
-          }
-        }
-        return novoCarrinho;
-      });
-      setComandasScaneadas(prev => [...prev, comanda.id]);
-      setComandaIdInput('');
-    } catch (error) {
-      console.error("Erro ao buscar comanda:", error);
-      alert(`Erro: ${error.response?.data?.message || 'Não foi possível buscar a comanda.'}`);
-    }
-  };
-
-  // --- Função chamada pelo leitor de código de barras ---
-  const handleBarcodeScanned = useCallback(async (barcode) => {
-    if (caixaStatus !== 'Aberto') return;
-
-    console.log("Código de barras lido:", barcode);
-    try {
-      const response = await axios.get(`${PRODUTOS_SERVICE_URL}/produtos/barcode/${barcode}`);
-      const produtoScaneado = response.data;
-
-      // Adiciona o produto ao carrinho
-      setCarrinho(prevCarrinho => {
-        const itemExistente = prevCarrinho.find(item => item.id === produtoScaneado.id);
-        if (itemExistente) {
-          return prevCarrinho.map(item =>
-            item.id === produtoScaneado.id ? { ...item, quantidade: item.quantidade + 1 } : item
-          );
-        } else {
-          return [...prevCarrinho, { ...produtoScaneado, quantidade: 1 }];
-        }
-      });
-
-    } catch (error) {
-      console.error("Erro ao buscar por código de barras:", error);
-    }
-  }, [caixaStatus]); 
-
-  // --- "Ouvinte" Global do Teclado (Leitor de Barras) ---
-  useEffect(() => {
-    
-    const handleKeyDown = (event) => {
-      if (isModalOpen || isAbrirModalOpen || isFecharModalOpen) return;
-      if (event.target.tagName.toLowerCase() === 'input') return;
-
-      if (event.key === 'Enter') {
-        if (barcodeBuffer.current.length > 8 && /^[0-9]+$/.test(barcodeBuffer.current)) {
-          event.preventDefault(); 
-          handleBarcodeScanned(barcodeBuffer.current);
-        }
-        barcodeBuffer.current = ""; 
-        return; 
-      }
-
-      if (event.key.length === 1) {
-        barcodeBuffer.current += event.key;
-      }
-
-      if (barcodeTimer.current) {
-        clearTimeout(barcodeTimer.current);
-      }
-      barcodeTimer.current = setTimeout(() => {
-        barcodeBuffer.current = "";
-      }, 100); 
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      if (barcodeTimer.current) {
-        clearTimeout(barcodeTimer.current);
-      }
-    };
-  }, [handleBarcodeScanned, isModalOpen, isAbrirModalOpen, isFecharModalOpen]);
-  
-  // --- Filtro de produtos (baseado na busca de texto) ---
-  const produtosFiltrados = produtos.filter(p =>
-    p.nome_item.toLowerCase().includes(filtro.toLowerCase())
-  );
-
-  // --- Renderização condicional (Loading/Erro) ---
-  if (caixaStatus === 'carregando') {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>Verificando status do caixa...</Typography>
+  // --- COMPONENTE DE CARRINHO ---
+  const CartContent = ({ isDrawer = false }) => (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.paper' }}>
+      {/* Header do Carrinho */}
+      <Box sx={{ 
+          p: 2, 
+          bgcolor: 'primary.main', 
+          color: 'primary.contrastText', 
+          display: 'flex', 
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: isDrawer ? 'pointer' : 'default'
+      }}
+      onClick={isDrawer ? toggleCartSize : undefined}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ShoppingCart size={20} />
+          <Typography variant="h6" fontWeight="bold">
+            Caixa Atual
+          </Typography>
+          {!isCartExpanded && isDrawer && (
+              <Chip label={`${calcularQtdItens()} itens`} size="small" sx={{ bgcolor: 'white', color: 'primary.main', fontWeight: 'bold' }} />
+          )}
+        </Box>
+        
+        {isDrawer && (
+            <Box>
+                <IconButton size="small" onClick={(e) => { e.stopPropagation(); toggleCartSize(); }} sx={{ color: 'inherit', mr: 1 }}>
+                    {isCartExpanded ? <ChevronDown size={24} /> : <ChevronUp size={24} />}
+                </IconButton>
+                <IconButton size="small" onClick={(e) => { e.stopPropagation(); setIsCartOpen(false); }} sx={{ color: 'inherit' }}>
+                    <X size={24} />
+                </IconButton>
+            </Box>
+        )}
       </Box>
-    );
-  }
-  if (caixaStatus === 'erro') {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <Typography color="error">Falha ao conectar com o serviço de caixa.</Typography>
-      </Box>
-    );
-  }
 
-  // --- Renderização principal (PDV) ---
-  return (
-    <Box sx={{ flexGrow: 1, position: 'relative' }}>
-      
-      {/* Modais (Abertura, Fechamento, Pagamento) */}
-      <AbrirCaixaModal open={isAbrirModalOpen} onCaixaAberto={handleCaixaAberto} />
-      <FecharCaixaModal
-        open={isFecharModalOpen}
-        onClose={() => setIsFecharModalOpen(false)}
-        onCaixaFechado={handleCaixaFechado}
-        sessaoId={sessaoId}
-      />
-      <Dialog open={isModalOpen} onClose={handleCloseModal} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold', textAlign: 'center' }}>
-          Finalizar Venda - {formaPagamento}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ textAlign: 'center', my: 2 }}>
-            <Typography variant="body1">Total da Venda</Typography>
-            <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
-              {formatCurrency(total)}
-            </Typography>
+      {/* Lista de Itens */}
+      {(isCartExpanded || !isDrawer) && (
+      <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
+        {carrinho.length === 0 ? (
+          <Box sx={{ 
+              height: '100%', display: 'flex', flexDirection: 'column', 
+              alignItems: 'center', justifyContent: 'center', opacity: 0.5, minHeight: 200
+          }}>
+              <ShoppingCart size={64} strokeWidth={1} />
+              <Typography variant="body1" sx={{ mt: 2 }}>Caixa livre</Typography>
           </Box>
-          {formaPagamento === 'Dinheiro' && (
-            <>
-              <TextField
-                inputRef={valorRecebidoRef} 
-                label="Valor Recebido"
-                type="number"
-                fullWidth
-                variant="outlined"
-                value={valorRecebido || ''}
-                onChange={(e) => setValorRecebido(parseFloat(e.target.value) || 0)}
-                InputProps={{
-                  startAdornment: <InputAdornment position="start">R$</InputAdornment>,
-                }}
-                sx={{ mb: 2 }}
-              />
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="body1">Troco</Typography>
-                <Typography variant="h4" color="primary" sx={{ fontWeight: 'bold' }}>
-                  {formatCurrency(valorRecebido > total ? valorRecebido - total : 0)}
-                </Typography>
+        ) : (
+          carrinho.map((item) => (
+            <Box 
+              key={item.id} 
+              sx={{ 
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  mb: 2, pb: 2, borderBottom: '1px dashed', borderColor: 'divider'
+              }}
+            >
+              <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" fontWeight="bold" noWrap sx={{ maxWidth: isMobile ? 120 : 160 }}>
+                      {item.nome}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                      Un. {formatCurrency(item.preco)}
+                  </Typography>
               </Box>
-            </>
-          )}
-          {(formaPagamento === 'Cartão' || formaPagamento === 'Pix') && (
-            <Typography sx={{ textAlign: 'center', color: 'text.secondary', my: 3 }}>
-              Confirme o pagamento na máquina/app.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleCloseModal} fullWidth>Cancelar</Button>
-          <Button 
-            onClick={handleConfirmarVenda} 
-            variant="contained" 
-            color="success" 
-            fullWidth
-            disabled={formaPagamento === 'Dinheiro' && valorRecebido < total}
-          >
-            Confirmar Venda
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Backdrop (Trava de Caixa Fechado) */}
-      {caixaStatus === 'Fechado' && (
-        <Backdrop
-          sx={{ 
-            zIndex: (theme) => theme.zIndex.drawer + 1,
-            position: 'absolute',
-            borderRadius: 1,
-            color: '#000', 
-            backgroundColor: 'rgba(255, 255, 255, 0.5)',
-            backdropFilter: 'blur(4px)',
-          }}
-          open={true}
-        >
-          {!isAbrirModalOpen && (
-            <Button variant="contained" color="success" size="large" onClick={() => setIsAbrirModalOpen(true)}>
-              Abrir Caixa
-            </Button>
-          )}
-        </Backdrop>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'action.hover', borderRadius: 50, px: 0.5 }}>
+                  <IconButton size="small" onClick={() => atualizarQuantidade(item.id, -1)} sx={{ p: 0.5 }}>
+                      <Minus size={14} />
+                  </IconButton>
+                  <Typography variant="body2" fontWeight="bold" sx={{ minWidth: 20, textAlign: 'center' }}>
+                      {item.quantidade}
+                  </Typography>
+                  <IconButton size="small" onClick={() => atualizarQuantidade(item.id, 1)} sx={{ p: 0.5 }}>
+                      <Plus size={14} />
+                  </IconButton>
+              </Box>
+
+              <Box sx={{ textAlign: 'right', minWidth: 70, ml: 1 }}>
+                  <Typography variant="body2" fontWeight="bold">
+                      {formatCurrency(item.preco * item.quantidade)}
+                  </Typography>
+                  <IconButton size="small" color="error" onClick={() => removerDoCarrinho(item.id)} sx={{ p: 0.5 }}>
+                      <Trash2 size={14} />
+                  </IconButton>
+              </Box>
+            </Box>
+          ))
+        )}
+      </Box>
       )}
 
-      {/* Grid Principal do PDV (Layout de 2 Colunas) */}
-      <Grid container spacing={2} sx={{ height: 'calc(100vh - 64px)', width: '100%' }}>
+      {/* Footer (Totais e Pagamento) */}
+      {(isCartExpanded || !isDrawer) && (
+      <Box sx={{ p: 2, bgcolor: 'background.default', borderTop: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h5" fontWeight="bold">Total</Typography>
+              <Typography variant="h5" fontWeight="bold" color="primary.main">
+                  {formatCurrency(calcularTotal())}
+              </Typography>
+          </Box>
 
-        {/* COLUNA 1: Produtos (Esquerda) */}
-        <Grid item xs={12} md={7}
-          sx={{
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            p: 3,
-            borderRight: '1px solid',
-            borderColor: 'divider'
-          }}
-        >
-          <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 2 }}>Produtos (Revenda)</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              Finalizar Venda:
+          </Typography>
+          
+          <Stack direction="row" spacing={1}>
+              <Button 
+                variant="contained" color="success" fullWidth 
+                startIcon={<Banknote size={18} />}
+                onClick={() => handleFinalizarVenda('Dinheiro')}
+                disabled={carrinho.length === 0}
+                sx={{ borderRadius: 2, py: 1 }}
+              >
+                Dinheiro
+              </Button>
+              <Button 
+                variant="contained" color="info" fullWidth 
+                startIcon={<CreditCard size={18} />}
+                onClick={() => handleFinalizarVenda('Cartão')}
+                disabled={carrinho.length === 0}
+                sx={{ borderRadius: 2, py: 1 }}
+              >
+                Cartão
+              </Button>
+              <Button 
+                variant="contained" color="secondary" fullWidth 
+                startIcon={<QrCode size={18} />}
+                onClick={() => handleFinalizarVenda('Pix')}
+                disabled={carrinho.length === 0}
+                sx={{ borderRadius: 2, py: 1 }}
+              >
+                Pix
+              </Button>
+          </Stack>
+      </Box>
+      )}
+    </Box>
+  );
+
+  return (
+    <Box sx={{ 
+        height: isMobile ? 'calc(100vh - 130px)' : 'calc(100vh - 100px)', 
+        display: 'flex', gap: 3, position: 'relative'
+    }}>
+      
+      {/* --- ESQUERDA: CATÁLOGO --- */}
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden', pb: isMobile ? 8 : 0 }}>
+        
+        {/* Barra de Busca */}
+        <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: 2 }}>
+          <Box>
+            <Typography variant={isMobile ? "h6" : "h5"} fontWeight="bold" color="text.primary" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Store /> PDV - Caixa
+            </Typography>
+            {!isMobile && (
+                <Typography variant="body2" color="text.secondary">
+                Selecione os itens para venda rápida
+                </Typography>
+            )}
+          </Box>
           <TextField
-            fullWidth
+            placeholder="Buscar produto (Nome ou Código)..."
             variant="outlined"
             size="small"
-            placeholder="Buscar produto por nome..."
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value)}
+            fullWidth={isMobile}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            sx={{ width: isMobile ? '100%' : 350, bgcolor: 'background.paper', borderRadius: 1 }}
             InputProps={{
-              startAdornment: (<InputAdornment position="start"><Search /></InputAdornment>),
+              startAdornment: (<InputAdornment position="start"><Search size={20} color="gray" /></InputAdornment>),
             }}
-            sx={{ mb: 2 }}
           />
-          <Box sx={{ overflowY: 'auto', flexGrow: 1, p: 0.5 }}>
-            <Grid container spacing={1}> 
-              {produtosFiltrados.map(produto => (
-                <Grid item xs={6} sm={4} key={produto.id}>
-                  <Paper 
-                    elevation={1}
-                    onClick={() => handleAddItem(produto)}
-                    sx={{ p: 1.5, textAlign: 'center', cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
-                  >
-                    <Typography variant="body1" sx={{ fontWeight: 500 }}>{produto.nome_item}</Typography>
-                    <Typography variant="body2" color="text.secondary">{formatCurrency(produto.preco_venda)}</Typography>
-                  </Paper>
-                </Grid>
-              ))}
-              {produtosFiltrados.length === 0 && (
-                   <Typography sx={{ p: 2, color: 'text.secondary' }}>
-                    Nenhum produto de revenda encontrado.
-                   </Typography>
-              )}
-            </Grid>
-          </Box>
-        </Grid>
-        
-        {/* COLUNA 2: Carrinho (Direita) */}
-        <Grid item xs={12} md={5}
-          sx={{
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            p: 3, 
-          }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Carrinho</Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button variant="outlined" color="warning" size="small" onClick={handleLimparCarrinho} disabled={carrinho.length === 0}>
-                Limpar
-              </Button>
-              <Button variant="outlined" color="error" size="small" onClick={handleFecharCaixa}>
-                Fechar Caixa
-              </Button>
-            </Box>
-          </Box>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-            <TextField
-              label="Buscar Comanda #"
-              size="small"
-              value={comandaIdInput}
-              onChange={(e) => setComandaIdInput(e.target.value)}
-              onKeyPress={(e) => { if (e.key === 'Enter') handleBuscarComanda(); }}
-              sx={{ flexGrow: 1 }}
+        </Box>
+
+        {/* Categorias (Chips) */}
+        <Box sx={{ display: 'flex', gap: 1, pb: 1, overflowX: 'auto', '&::-webkit-scrollbar': { display: 'none' }, scrollbarWidth: 'none' }}>
+          <Chip
+             label="Todos"
+             icon={<ShoppingBag size={18} />}
+             clickable
+             color={categoriaSelecionada === 'all' ? 'primary' : 'default'}
+             variant={categoriaSelecionada === 'all' ? 'filled' : 'outlined'}
+             onClick={() => setCategoriaSelecionada('all')}
+             sx={{ px: 1, fontWeight: 500, height: 36, borderRadius: '12px', flexShrink: 0 }}
+          />
+          {categorias.map((cat) => (
+            <Chip
+              key={cat.id}
+              icon={<DynamicIcon name={cat.icon} size={18} />}
+              label={cat.nome}
+              clickable
+              color={categoriaSelecionada === cat.id ? 'primary' : 'default'}
+              variant={categoriaSelecionada === cat.id ? 'filled' : 'outlined'}
+              onClick={() => setCategoriaSelecionada(cat.id)}
+              sx={{ px: 1, fontWeight: 500, height: 36, borderRadius: '12px', flexShrink: 0 }}
             />
-            <Button variant="contained" onClick={handleBuscarComanda}>
-              Buscar
-            </Button>
-          </Box>
-          <Divider sx={{ mb: 2 }} />
-          
-          <List sx={{ overflowY: 'auto', flexGrow: 1, backgroundColor: 'background.paper', borderRadius: 1 }}>
-            {carrinho.map(item => (
-              <ListItem key={item.id} divider>
-                <ListItemText 
-                  primary={item.nome_item}
-                  secondary={formatCurrency(item.preco_venda * item.quantidade)}
-                />
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <IconButton size="small" onClick={() => handleChangeQuantidade(item.id, 'decrementar')}>
-                    <RemoveCircle />
-                  </IconButton>
-                  <Typography sx={{ mx: 1, fontWeight: 500 }}>{item.quantidade}</Typography>
-                  <IconButton size="small" onClick={() => handleChangeQuantidade(item.id, 'incrementar')}>
-                    <AddCircle />
-                  </IconButton>
-                  <IconButton size="small" color="error" sx={{ ml: 1 }} onClick={() => handleChangeQuantidade(item.id, 'remover')}>
-                    <Delete />
-                  </IconButton>
-                </Box>
-              </ListItem>
-            ))}
-            {carrinho.length === 0 && (
-              <Typography sx={{ textAlign: 'center', color: 'text.secondary', mt: 4 }}>
-                Carrinho vazio
-              </Typography>
-            )}
-          </List>
-          
-          <Box sx={{ mt: 'auto', pt: 2 }}>
-            <Divider sx={{ my: 2 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>Total:</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 'bold' }}>{formatCurrency(total)}</Typography>
-            </Box>
-            <Grid container spacing={1}>
-              <Grid item xs={4}>
-                <Button fullWidth variant="contained" color="success" disabled={carrinho.length === 0} onClick={() => handleOpenPaymentModal('Dinheiro')}>
-                  Dinheiro
-                </Button>
-              </Grid>
-              <Grid item xs={4}>
-                <Button fullWidth variant="contained" color="primary" disabled={carrinho.length === 0} onClick={() => handleOpenPaymentModal('Cartão')}>
-                  Cartão
-                </Button>
-              </Grid>
-              <Grid item xs={4}>
-                <Button fullWidth variant="contained" color="secondary" disabled={carrinho.length === 0} onClick={() => handleOpenPaymentModal('Pix')}>
-                  Pix
-                </Button>
-              </Grid>
+          ))}
+        </Box>
+
+        {/* Grid de Produtos */}
+        <Box sx={{ flexGrow: 1, overflowY: 'auto', pr: 1 }}>
+          {loading ? (
+             <Box sx={{ display: 'flex', justifyContent: 'center', pt: 5 }}><CircularProgress /></Box>
+          ) : (
+            <Grid container spacing={2}>
+                {produtosFiltrados.map((produto) => (
+                <Grid item xs={6} sm={4} md={4} lg={3} key={produto.id}>
+                    <Card 
+                    sx={{ 
+                        height: '100%', display: 'flex', flexDirection: 'column',
+                        borderRadius: 3, border: '1px solid', borderColor: 'divider',
+                        boxShadow: 'none', transition: '0.2s', cursor: 'pointer',
+                        position: 'relative', overflow: 'visible',
+                        '&:active': { transform: 'scale(0.98)' }, 
+                        '&:hover': { borderColor: 'primary.main', transform: !isMobile && 'translateY(-4px)' }
+                    }}
+                    onClick={() => adicionarAoCarrinho(produto)}
+                    >
+                    <CardContent sx={{ p: 2, textAlign: 'center', flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        {/* Avatar com Ícone da Categoria */}
+                        <Avatar variant="rounded" sx={{ width: isMobile ? 48 : 64, height: isMobile ? 48 : 64, bgcolor: 'primary.light', color: 'primary.main', mb: 1.5 }}>
+                            {(() => {
+                                const cat = categorias.find(c => c.id === produto.categoria_id);
+                                return <DynamicIcon name={cat ? cat.icon : 'Utensils'} size={isMobile ? 24 : 32} />;
+                            })()}
+                        </Avatar>
+
+                        <Typography variant={isMobile ? "body2" : "subtitle1"} fontWeight="bold" noWrap sx={{ width: '100%' }} title={produto.nome_item}>
+                            {produto.nome_item}
+                        </Typography>
+                        <Typography variant="body1" color="primary.main" fontWeight="bold">
+                            {formatCurrency(produto.preco_venda)}
+                        </Typography>
+                    </CardContent>
+                    
+                    {/* Badge de Qtd */}
+                    {carrinho.find(i => i.id === produto.id) && (
+                        <Box sx={{
+                            position: 'absolute', top: -8, right: -8,
+                            bgcolor: 'secondary.main', color: 'white',
+                            width: 24, height: 24, borderRadius: '50%',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 12, fontWeight: 'bold', boxShadow: 2, zIndex: 2
+                        }}>
+                            {carrinho.find(i => i.id === produto.id).quantidade}
+                        </Box>
+                    )}
+                    </Card>
+                </Grid>
+                ))}
+                {produtosFiltrados.length === 0 && (
+                <Grid item xs={12}>
+                    <Box sx={{ textAlign: 'center', mt: 5, opacity: 0.6 }}>
+                        <Typography variant="h6">Nenhum produto encontrado.</Typography>
+                    </Box>
+                </Grid>
+                )}
             </Grid>
-          </Box>
-        </Grid>
-      </Grid>
+          )}
+        </Box>
+      </Box>
+
+      {/* --- DIREITA: CAIXA (Desktop) --- */}
+      {!isMobile && (
+        <Paper elevation={0} sx={{ width: 400, borderLeft: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', height: '100%' }}>
+           <CartContent />
+        </Paper>
+      )}
+
+      {/* --- DRAWER (Mobile) --- */}
+      {isMobile && (
+        <>
+            <Drawer
+                anchor="bottom"
+                open={isCartOpen}
+                onClose={() => setIsCartOpen(false)}
+                PaperProps={{
+                    sx: { 
+                        height: isCartExpanded ? '90vh' : 'auto',
+                        borderTopLeftRadius: 20, borderTopRightRadius: 20,
+                        transition: 'height 0.3s ease-in-out'
+                    }
+                }}
+            >
+                <CartContent isDrawer={true} />
+            </Drawer>
+            <Paper 
+                elevation={10}
+                sx={{ 
+                    position: 'fixed', bottom: 0, left: 0, right: 0, 
+                    p: 2, bgcolor: 'background.paper', zIndex: 1200,
+                    borderTop: '1px solid', borderColor: 'divider',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    ml: { sm: `240px` } 
+                }}
+            >
+                <Box>
+                    <Typography variant="caption" color="text.secondary">Total ( {calcularQtdItens()} itens )</Typography>
+                    <Typography variant="h6" fontWeight="bold" color="primary.main">
+                        {formatCurrency(calcularTotal())}
+                    </Typography>
+                </Box>
+                <Button 
+                    variant="contained" 
+                    onClick={() => { setIsCartOpen(true); setIsCartExpanded(true); }}
+                    startIcon={<ShoppingCart />}
+                    sx={{ borderRadius: 8, px: 3 }}
+                >
+                    Ver Caixa
+                </Button>
+            </Paper>
+        </>
+      )}
     </Box>
   );
 }

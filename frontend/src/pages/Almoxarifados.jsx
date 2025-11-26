@@ -1,5 +1,5 @@
 // src/pages/Almoxarifados.jsx
-// (ATUALIZADO: Busca de 'gerenciamento' e passa props corretas)
+// (ATUALIZADO: Com "Empty State" quando não há registros)
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -7,7 +7,7 @@ import {
   Box, Typography, Button, Paper, CircularProgress,
   TextField, InputAdornment
 } from '@mui/material';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Warehouse } from 'lucide-react'; // 1. Importar ícone
 import AlmoxarifadoForm from '../components/almoxarifados/AlmoxarifadoForm';
 import AlmoxarifadoList from '../components/almoxarifados/AlmoxarifadoList';
 import ConfirmationDialog from '../components/common/ConfirmationDialog';
@@ -29,13 +29,12 @@ export default function Almoxarifados() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // CORREÇÃO: Busca da rota de gerenciamento
       const response = await axios.get(`${ALMOXARIFADOS_SERVICE_URL}/almoxarifados/gerenciamento`);
       setAlmoxarifados(response.data);
       setFilteredAlmoxarifados(response.data);
     } catch (error) {
       console.error("Erro ao buscar almoxarifados:", error);
-      setAlmoxarifados([]); // Garante que é um array
+      setAlmoxarifados([]);
     } finally {
       setLoading(false);
     }
@@ -53,7 +52,7 @@ export default function Almoxarifados() {
     }
     const lowerCaseFilter = filterText.toLowerCase();
     setFilteredAlmoxarifados(
-      (almoxarifados || []).filter((a) => // "Blinda" o filtro
+      (almoxarifados || []).filter((a) => 
         a.nome.toLowerCase().includes(lowerCaseFilter)
       )
     );
@@ -95,6 +94,62 @@ export default function Almoxarifados() {
     }
   };
 
+  // ==========================================================
+  // 2. FUNÇÃO DE RENDERIZAÇÃO (Lógica do Empty State)
+  // ==========================================================
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    if (almoxarifados.length === 0) {
+      return (
+        <Paper 
+          sx={{ textAlign: 'center', p: 4, mt: 2, backgroundColor: 'action.hover' }}
+          variant="outlined"
+        >
+          <Warehouse size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            Nenhum almoxarifado cadastrado
+          </Typography>
+          <Typography color="text.secondary">
+            Clique em "Novo Almoxarifado" para cadastrar o seu primeiro local de estoque.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <>
+        {/* Campo de Busca */}
+        <Paper sx={{ mb: 2, p: 2 }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            placeholder="Buscar por nome..."
+            InputProps={{
+              startAdornment: (<InputAdornment position="start"><Search /></InputAdornment>),
+            }}
+          />
+        </Paper>
+        
+        {/* Tabela de Locais */}
+        <AlmoxarifadoList
+          almoxarifados={filteredAlmoxarifados}
+          onEdit={handleOpenModal}
+          onDelete={handleOpenDeleteDialog}
+        />
+      </>
+    );
+  };
+  // ==========================================================
+
   return (
     <Box>
       <AlmoxarifadoForm
@@ -125,30 +180,9 @@ export default function Almoxarifados() {
         </Button>
       </Box>
 
-
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          value={filterText}
-          onChange={(e) => setFilterText(e.target.value)}
-          placeholder="Buscar por nome..."
-          InputProps={{
-            startAdornment: (<InputAdornment position="start"><Search /></InputAdornment>),
-          }}
-        />
-      </Box>
-    
-      {/* Tabela de Locais */}
-      {loading ? (
-        <CircularProgress />
-      ) : (
-        <AlmoxarifadoList
-          almoxarifados={filteredAlmoxarifados}
-          onEdit={handleOpenModal}
-          onDelete={handleOpenDeleteDialog}
-        />
-      )}
+      {/* 3. Renderiza o conteúdo condicional */}
+      {renderContent()}
+      
     </Box>
   );
 }

@@ -1,13 +1,13 @@
 // src/pages/Transferencias.jsx
-// (ATUALIZADO: Com o novo fluxo de 2 etapas e a função 'onSaveRascunho')
+// (ATUALIZADO: Com "Empty State" quando não há transferências)
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Box, Typography, Paper, CircularProgress, Button } from '@mui/material';
-import { MoveRight } from 'lucide-react';
+import { MoveRight, ArrowRightLeft } from 'lucide-react';
 import TransferenciaList from '../components/almoxarifados/TransferenciaList';
 import TransferenciaForm from '../components/almoxarifados/TransferenciaForm'; 
-import ConfirmationDialog from '../components/common/ConfirmationDialog'; // (Necessário para as ações)
+import ConfirmationDialog from '../components/common/ConfirmationDialog';
 
 const PRODUTOS_SERVICE_URL = 'http://localhost:3003';
 const ALMOXARIFADOS_SERVICE_URL = 'http://localhost:3008';
@@ -16,7 +16,6 @@ export default function Transferencias() {
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // --- Estados para o novo fluxo ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transferenciaToEdit, setTransferenciaToEdit] = useState(null);
   
@@ -31,41 +30,32 @@ export default function Transferencias() {
 
   const fetchData = async () => {
     setLoading(true);
+    
+    // 1. Busca os dados para os MODAIS
     try {
-      // Separa as chamadas para que o erro 500 não quebre os dropdowns
+      const [resAlmox, resProd] = await Promise.all([
+        axios.get(`${ALMOXARIFADOS_SERVICE_URL}/almoxarifados`), 
+        axios.get(`${PRODUTOS_SERVICE_URL}/produtos/gerenciamento`)
+      ]);
       
-      // 1. Busca os dados para os MODAIS
-      try {
-        const [resAlmox, resProd] = await Promise.all([
-          axios.get(`${ALMOXARIFADOS_SERVICE_URL}/almoxarifados`), // Busca ATIVOS
-          axios.get(`${PRODUTOS_SERVICE_URL}/produtos/gerenciamento`)
-        ]);
-        setAlmoxarifados(Array.isArray(resAlmox.data) ? resAlmox.data : []);
-        setProdutos(Array.isArray(resProd.data) ? resProd.data : []);
-      } catch (error) {
-         console.error("Erro CRÍTICO ao buscar dados para o modal (Almox/Prod):", error);
-         setAlmoxarifados([]);
-         setProdutos([]);
-      }
-
-      // 2. Busca o HISTÓRICO
-      try {
-        // (A rota GET /transferencias é a do back-end novo que enviei)
-        const resHist = await axios.get(`${PRODUTOS_SERVICE_URL}/transferencias`);
-        setHistorico(Array.isArray(resHist.data) ? resHist.data : []);
-      } catch (error) {
-        console.error("Erro ao buscar HISTÓRICO de transferências:", error);
-        setHistorico([]); 
-      }
-      
+      setAlmoxarifados(Array.isArray(resAlmox.data) ? resAlmox.data : []);
+      setProdutos(Array.isArray(resProd.data) ? resProd.data : []);
     } catch (error) {
-      console.error("Erro ao buscar dados:", error);
-      setHistorico([]); 
-      setAlmoxarifados([]);
-      setProdutos([]);
-    } finally {
-      setLoading(false);
+       console.error("Erro CRÍTICO ao buscar dados para o modal:", error);
+       setAlmoxarifados([]);
+       setProdutos([]);
     }
+
+    // 2. Busca o HISTÓRICO
+    try {
+      const resHist = await axios.get(`${PRODUTOS_SERVICE_URL}/transferencias`);
+      setHistorico(Array.isArray(resHist.data) ? resHist.data : []);
+    } catch (error) {
+      console.error("Erro ao buscar histórico:", error);
+      setHistorico([]); 
+    }
+    
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -81,25 +71,15 @@ export default function Transferencias() {
     setIsModalOpen(false);
   };
 
-  // ==========================================================
-  // 1. CORREÇÃO: Função 'handleSaveRascunho' que estava faltando
-  // ==========================================================
-  // Chamado nas Etapas 1 e 2 (Salvar e Seguir)
-  // Apenas atualiza a lista, NÃO fecha o modal.
   const handleSaveRascunho = () => {
-    fetchData();
+    fetchData(); 
   };
-
-  // Chamado na Etapa 2 (Salvar Final)
-  // Atualiza a lista E fecha o modal.
   const handleSaveSuccess = () => {
     fetchData();
     handleCloseModal();
   };
-  // ==========================================================
 
-
-  // --- Lógica de Ações de Status (Finalizar, Cancelar) ---
+  // --- Lógica de Ações ---
   const openConfirmDialog = (action, payload, title, message) => {
     setConfirmAction(action);
     setConfirmPayload(payload);
@@ -120,8 +100,6 @@ export default function Transferencias() {
   
   const handleCloseDeleteDialog = () => {
     setIsConfirmOpen(false);
-    setConfirmAction(null);
-    setConfirmPayload(null);
   };
   
   const handleConfirmAction = async () => {
@@ -151,24 +129,57 @@ export default function Transferencias() {
     }
   };
 
+  // ==========================================================
+  // FUNÇÃO DE RENDERIZAÇÃO DO CONTEÚDO (Empty State)
+  // ==========================================================
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+          <CircularProgress />
+        </Paper>
+      );
+    }
+
+    if (historico.length === 0) {
+      return (
+        <Paper 
+          sx={{ textAlign: 'center', p: 4, mt: 2, backgroundColor: 'action.hover' }}
+          variant="outlined"
+        >
+          <ArrowRightLeft size={48} style={{ opacity: 0.5, marginBottom: '16px' }} />
+          <Typography variant="h6" sx={{ fontWeight: 500 }}>
+            Nenhuma transferência registrada
+          </Typography>
+          <Typography color="text.secondary">
+            Clique em "Nova Transferência" para movimentar itens entre almoxarifados.
+          </Typography>
+        </Paper>
+      );
+    }
+
+    return (
+      <TransferenciaList 
+          historico={historico}
+          onEdit={handleOpenModal}
+          onFinalizar={handleFinalizar}
+          onCancelar={handleCancelar}
+      />
+    );
+  };
+  // ==========================================================
 
   return (
     <Box>
-      {/* ==========================================================
-          2. CORREÇÃO: Passando as props corretas para o Form
-         ========================================================== */}
       <TransferenciaForm
         open={isModalOpen}
         onClose={handleCloseModal}
-        onSaveSuccess={handleSaveSuccess}    // Para o botão final "Salvar Itens"
-        onSaveRascunho={handleSaveRascunho} // <-- A PROP QUE FALTAVA
+        onSaveSuccess={handleSaveSuccess}
+        onSaveRascunho={handleSaveRascunho}
         transferenciaToEdit={transferenciaToEdit}
-        // Passa os dropdowns para o modal
         almoxarifados={almoxarifados}
         produtos={produtos}
       />
-      {/* ========================================================== */}
-      
       <ConfirmationDialog
         open={isConfirmOpen}
         onClose={handleCloseDeleteDialog}
@@ -191,18 +202,8 @@ export default function Transferencias() {
         </Button>
       </Box>
 
-      {loading ? (
-        <Paper sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Paper>
-      ) : (
-        <TransferenciaList 
-            historico={historico}
-            onEdit={handleOpenModal}
-            onFinalizar={handleFinalizar}
-            onCancelar={handleCancelar}
-        />
-      )}
+      {renderContent()}
+      
     </Box>
   );
 }
