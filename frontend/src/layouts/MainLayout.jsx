@@ -1,319 +1,271 @@
-// src/layouts/MainLayout.jsx
-// (ATUALIZADO: Menu Responsivo - Mini/Expansível no Desktop + Hamburger no Mobile)
-
-import React, { useState, useContext, useEffect } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { 
-    Box, Toolbar, List, Typography, ListItem, 
-    ListItemButton, ListItemIcon, ListItemText, IconButton, Collapse, Divider,
-    AppBar as MuiAppBar, Drawer as MuiDrawer, useMediaQuery
+    Box, Drawer, AppBar, Toolbar, List, Typography, Divider, 
+    IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, 
+    Collapse, Avatar, Menu, MenuItem, Tooltip 
 } from '@mui/material';
-import { styled, useTheme } from '@mui/material/styles';
-import { ColorModeContext } from '../App';
-
 import { 
-    LayoutDashboard, Package, Users, Building, ShoppingCart, Warehouse, 
-    ChefHat, Landmark, HandCoins, ScrollText, BookCheck, ChevronDown, ChevronUp,
-    Sun, Moon, ArrowRightLeft, FileText, ClipboardCheck, Store, Laptop, LayoutGrid, Boxes,
-    Menu as MenuIcon, ChevronLeft, ChevronRight
+    Menu as MenuIcon, 
+    ChevronLeft, 
+    ExpandLess, 
+    ExpandMore,
+    LayoutDashboard,
+    ChefHat,         // Produção
+    ShoppingCart,    // Vendas/PDV
+    Package,         // Almoxarifado/Estoque
+    ShoppingBag,     // Compras
+    Users,           // Clientes/Fornecedores
+    CircleDollarSign,// Financeiro (Menu Pai)
+    Landmark,        // Contas Bancárias
+    History,         // Histórico/Extrato
+    TrendingUp,      // Contas a Receber
+    TrendingDown,    // Contas a Pagar
+    Settings,
+    LogOut,
+    User
 } from 'lucide-react';
 
-const drawerWidth = 260; // Largura do menu aberto
+const drawerWidth = 260;
 
-// --- MIXINS PARA TRANSIÇÕES CSS (Animação de abrir/fechar) ---
-const openedMixin = (theme) => ({
-  width: drawerWidth,
-  transition: theme.transitions.create('width', {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.enteringScreen,
-  }),
-  overflowX: 'hidden',
-});
-
-const closedMixin = (theme) => ({
-  transition: theme.transitions.create('width', {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  overflowX: 'hidden',
-  width: `calc(${theme.spacing(7)} + 1px)`, // Largura quando fechado (só ícones)
-  [theme.breakpoints.up('sm')]: {
-    width: `calc(${theme.spacing(8)} + 1px)`,
-  },
-});
-
-// --- COMPONENTES ESTILIZADOS ---
-const DrawerHeader = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between', // Espaço entre título e botão de fechar
-  padding: theme.spacing(0, 1),
-  // Necessário para o conteúdo ficar abaixo da AppBar
-  ...theme.mixins.toolbar,
-}));
-
-const AppBar = styled(MuiAppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-  zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(['width', 'margin'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  ...(open && {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-}));
-
-// O Drawer Desktop (Permanente com variação de largura)
-const DesktopDrawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
-  ({ theme, open }) => ({
-    width: drawerWidth,
-    flexShrink: 0,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    ...(open && {
-      ...openedMixin(theme),
-      '& .MuiDrawer-paper': openedMixin(theme),
-    }),
-    ...(!open && {
-      ...closedMixin(theme),
-      '& .MuiDrawer-paper': closedMixin(theme),
-    }),
-  }),
-);
-
-const MainLayout = () => {
-  const theme = useTheme();
-  const colorMode = useContext(ColorModeContext);
-  const location = useLocation();
-  
-  // Detecta se é mobile (tela pequena)
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  // Estados de controle dos Menus (Pai)
-  const [openFinanceiro, setOpenFinanceiro] = useState(false);
-  const [openEstoque, setOpenEstoque] = useState(false);
-
-  // Estado do Menu Lateral (Aberto/Fechado)
-  const [open, setOpen] = useState(true); // Desktop começa aberto
-  const [mobileOpen, setMobileOpen] = useState(false); // Mobile começa fechado
-
-  // Efeito para abrir os submenus corretos ao carregar a página
-  useEffect(() => {
-    if (location.pathname.startsWith('/financeiro')) setOpenFinanceiro(true);
-    if (location.pathname.startsWith('/estoque') || location.pathname === '/categorias') setOpenEstoque(true);
+export default function MainLayout() {
+    const [open, setOpen] = useState(true);
+    const [anchorEl, setAnchorEl] = useState(null);
     
-    // No mobile, fecha o menu ao navegar
-    if (isMobile) setMobileOpen(false);
-  }, [location.pathname, isMobile]);
+    // Estados para menus expansíveis (Collapses)
+    const [financeiroOpen, setFinanceiroOpen] = useState(false);
+    const [producaoOpen, setProducaoOpen] = useState(false);
+    const [estoqueOpen, setEstoqueOpen] = useState(false);
 
-  // --- HANDLERS ---
+    const location = useLocation();
 
-  // Alterna o menu lateral (Desktop ou Mobile)
-  const handleDrawerToggle = () => {
-    if (isMobile) {
-        setMobileOpen(!mobileOpen);
-    } else {
+    const handleDrawerToggle = () => {
         setOpen(!open);
-    }
-  };
+    };
 
-  // Lógica inteligente para menus-pai (Estoque/Financeiro)
-  // Se o menu estiver "minimizado", ele abre primeiro, depois expande o submenu
-  const handleParentMenuClick = (menuState, setMenuState) => {
-    if (!open && !isMobile) {
-        setOpen(true); // Abre a lateral
-        setTimeout(() => setMenuState(true), 200); // Abre o submenu com leve delay
-    } else {
-        setMenuState(!menuState); // Apenas alterna o submenu
-    }
-  };
+    const handleMenuOpen = (event) => {
+        setAnchorEl(event.currentTarget);
+    };
 
-  // --- LISTA DE ITENS DO MENU (Renderização) ---
-  const drawerContent = (
-    <List sx={{ px: 1 }}>
-        
-        {/* Itens Raiz */}
-        {[
-            { text: 'Dashboard', icon: <LayoutDashboard size={22} />, path: '/' },
-            { text: 'PDV', icon: <Store size={22} />, path: '/pdv' },
-            { text: 'Terminal Balcão', icon: <Laptop size={22} />, path: '/terminal-balcao' },
-            { text: 'Clientes', icon: <Users size={22} />, path: '/clientes' },
-            { text: 'Fornecedores', icon: <Building size={22} />, path: '/fornecedores' },
-            { text: 'Produção', icon: <ChefHat size={22} />, path: '/producao' },
-        ].map((item) => (
-            <ListItem key={item.text} disablePadding sx={{ display: 'block', mb: 0.5 }}>
-                <ListItemButton
-                    component={NavLink}
-                    to={item.path}
-                    end={item.path === '/'}
-                    sx={{
-                        minHeight: 48,
-                        justifyContent: open ? 'initial' : 'center', // Centraliza ícone se fechado
-                        px: 2.5,
-                        borderRadius: '8px',
-                        '&.active': { backgroundColor: 'action.selected', fontWeight: 'bold' }
-                    }}
-                    title={!open ? item.text : ""} // Tooltip nativo se fechado
-                >
-                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 2 : 'auto', justifyContent: 'center' }}>
-                        {item.icon}
-                    </ListItemIcon>
-                    <ListItemText primary={item.text} sx={{ opacity: open ? 1 : 0 }} />
-                </ListItemButton>
-            </ListItem>
-        ))}
+    const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
 
-        <Divider sx={{ my: 1 }} />
+    // Helper para verificar rota ativa
+    const isActive = (path) => location.pathname === path;
 
-        {/* Menu ESTOQUE */}
-        <ListItem disablePadding sx={{ display: 'block' }}>
-            <ListItemButton
-                onClick={() => handleParentMenuClick(openEstoque, setOpenEstoque)}
-                sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5, borderRadius: '8px' }}
-            >
-                <ListItemIcon sx={{ minWidth: 0, mr: open ? 2 : 'auto', justifyContent: 'center' }}>
-                    <Warehouse size={22} />
-                </ListItemIcon>
-                <ListItemText primary="Estoque" sx={{ opacity: open ? 1 : 0 }} />
-                {open && (openEstoque ? <ChevronUp size={20} /> : <ChevronDown size={20} />)}
-            </ListItemButton>
-            
-            <Collapse in={open && openEstoque} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding>
-                    {[
-                        { text: 'Posição de Estoque', icon: <Boxes size={20} />, path: '/estoque/posicao' },
-                        { text: 'Produtos', icon: <Package size={20} />, path: '/estoque/produtos' },
-                        { text: 'Categorias', icon: <LayoutGrid size={20} />, path: '/estoque/categorias' },
-                        { text: 'Almoxarifados', icon: <Warehouse size={20} />, path: '/estoque/almoxarifados' },
-                        { text: 'Transferências', icon: <ArrowRightLeft size={20} />, path: '/estoque/transferencias' },
-                        { text: 'Requisições', icon: <FileText size={20} />, path: '/estoque/requisicoes' },
-                        { text: 'Pedidos de Compra', icon: <ClipboardCheck size={20} />, path: '/estoque/pedidos' },
-                        { text: 'Entrada (Compras)', icon: <ShoppingCart size={20} />, path: '/estoque/compras' },
-                    ].map((subItem) => (
-                        <ListItemButton 
-                            key={subItem.text}
-                            component={NavLink} 
-                            to={subItem.path}
-                            sx={{ pl: 4, borderRadius: '8px', '&.active': { backgroundColor: 'action.selected' } }}
+    // Estilo para o ícone ativo
+    const iconStyle = (path) => ({
+        color: isActive(path) ? '#1976d2' : '#5f6368',
+        minWidth: '40px'
+    });
+
+    const textStyle = (path) => ({
+        '& span': { 
+            fontWeight: isActive(path) ? 'bold' : 'normal',
+            color: isActive(path) ? '#1976d2' : 'inherit'
+        }
+    });
+
+    return (
+        <Box sx={{ display: 'flex' }}>
+            {/* Top Bar */}
+            <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+                <Toolbar>
+                    <IconButton
+                        color="inherit"
+                        aria-label="open drawer"
+                        onClick={handleDrawerToggle}
+                        edge="start"
+                        sx={{ marginRight: 2 }}
+                    >
+                        {open ? <ChevronLeft /> : <MenuIcon />}
+                    </IconButton>
+                    <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+                        Padaria ERP
+                    </Typography>
+                    
+                    <Box>
+                        <Tooltip title="Configurações de Conta">
+                            <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
+                                <Avatar alt="Admin User" src="/static/images/avatar/2.jpg" />
+                            </IconButton>
+                        </Tooltip>
+                        <Menu
+                            sx={{ mt: '45px' }}
+                            id="menu-appbar"
+                            anchorEl={anchorEl}
+                            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            keepMounted
+                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                            open={Boolean(anchorEl)}
+                            onClose={handleMenuClose}
                         >
-                            <ListItemIcon>{subItem.icon}</ListItemIcon>
-                            <ListItemText primary={subItem.text} />
-                        </ListItemButton>
-                    ))}
-                </List>
-            </Collapse>
-        </ListItem>
+                            <MenuItem onClick={handleMenuClose}>
+                                <ListItemIcon><User size={18} /></ListItemIcon>
+                                <Typography textAlign="center">Perfil</Typography>
+                            </MenuItem>
+                            <MenuItem onClick={handleMenuClose}>
+                                <ListItemIcon><Settings size={18} /></ListItemIcon>
+                                <Typography textAlign="center">Configurações</Typography>
+                            </MenuItem>
+                            <Divider />
+                            <MenuItem onClick={handleMenuClose}>
+                                <ListItemIcon><LogOut size={18} color="red" /></ListItemIcon>
+                                <Typography textAlign="center" color="error">Sair</Typography>
+                            </MenuItem>
+                        </Menu>
+                    </Box>
+                </Toolbar>
+            </AppBar>
 
-        {/* Menu FINANCEIRO */}
-        <ListItem disablePadding sx={{ display: 'block' }}>
-            <ListItemButton
-                onClick={() => handleParentMenuClick(openFinanceiro, setOpenFinanceiro)}
-                sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5, borderRadius: '8px' }}
+            {/* Sidebar Drawer */}
+            <Drawer
+                variant="permanent"
+                sx={{
+                    width: open ? drawerWidth : 72,
+                    flexShrink: 0,
+                    [`& .MuiDrawer-paper`]: { 
+                        width: open ? drawerWidth : 72, 
+                        boxSizing: 'border-box',
+                        transition: 'width 0.3s',
+                        overflowX: 'hidden'
+                    },
+                }}
             >
-                <ListItemIcon sx={{ minWidth: 0, mr: open ? 2 : 'auto', justifyContent: 'center' }}>
-                    <Landmark size={22} />
-                </ListItemIcon>
-                <ListItemText primary="Financeiro" sx={{ opacity: open ? 1 : 0 }} />
-                {open && (openFinanceiro ? <ChevronUp size={20} /> : <ChevronDown size={20} />)}
-            </ListItemButton>
-            
-            <Collapse in={open && openFinanceiro} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding>
-                    {[
-                        { text: 'Contas a Pagar', icon: <ScrollText size={20} />, path: '/financeiro/contas-a-pagar' },
-                        { text: 'Contas a Receber', icon: <HandCoins size={20} />, path: '/financeiro/contas-a-receber' },
-                        { text: 'Plano de Contas', icon: <BookCheck size={20} />, path: '/financeiro/plano-de-contas' },
-                    ].map((subItem) => (
-                        <ListItemButton 
-                            key={subItem.text}
-                            component={NavLink} 
-                            to={subItem.path}
-                            sx={{ pl: 4, borderRadius: '8px', '&.active': { backgroundColor: 'action.selected' } }}
-                        >
-                            <ListItemIcon>{subItem.icon}</ListItemIcon>
-                            <ListItemText primary={subItem.text} />
+                <Toolbar /> {/* Espaçador para a AppBar */}
+                <Box sx={{ overflow: 'auto', mt: 1 }}>
+                    <List>
+                        {/* Dashboard */}
+                        <ListItem disablePadding sx={{ display: 'block' }}>
+                            <ListItemButton component={Link} to="/" sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                                <ListItemIcon sx={iconStyle('/')}>
+                                    <LayoutDashboard />
+                                </ListItemIcon>
+                                <ListItemText primary="Dashboard" sx={{ opacity: open ? 1 : 0, ...textStyle('/') }} />
+                            </ListItemButton>
+                        </ListItem>
+
+                        {/* PDV / Vendas */}
+                        <ListItem disablePadding sx={{ display: 'block' }}>
+                            <ListItemButton component={Link} to="/pdv" sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                                <ListItemIcon sx={iconStyle('/pdv')}>
+                                    <ShoppingCart />
+                                </ListItemIcon>
+                                <ListItemText primary="PDV / Vendas" sx={{ opacity: open ? 1 : 0, ...textStyle('/pdv') }} />
+                            </ListItemButton>
+                        </ListItem>
+
+                        {/* Menu Produção */}
+                        <ListItemButton onClick={() => setProducaoOpen(!producaoOpen)} sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                            <ListItemIcon sx={{ minWidth: '40px', color: '#5f6368' }}>
+                                <ChefHat />
+                            </ListItemIcon>
+                            <ListItemText primary="Produção" sx={{ opacity: open ? 1 : 0 }} />
+                            {open && (producaoOpen ? <ExpandLess /> : <ExpandMore />)}
                         </ListItemButton>
-                    ))}
-                </List>
-            </Collapse>
-        </ListItem>
+                        <Collapse in={producaoOpen && open} timeout="auto" unmountOnExit>
+                            <List component="div" disablePadding>
+                                <ListItemButton component={Link} to="/producao/ordens" sx={{ pl: 4 }}>
+                                    <ListItemText primary="Ordens de Produção" sx={textStyle('/producao/ordens')} />
+                                </ListItemButton>
+                                <ListItemButton component={Link} to="/producao/fichas" sx={{ pl: 4 }}>
+                                    <ListItemText primary="Fichas Técnicas" sx={textStyle('/producao/fichas')} />
+                                </ListItemButton>
+                            </List>
+                        </Collapse>
 
-    </List>
-  );
+                        {/* Menu Almoxarifado & Compras */}
+                        <ListItemButton onClick={() => setEstoqueOpen(!estoqueOpen)} sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                            <ListItemIcon sx={{ minWidth: '40px', color: '#5f6368' }}>
+                                <Package />
+                            </ListItemIcon>
+                            <ListItemText primary="Estoque & Compras" sx={{ opacity: open ? 1 : 0 }} />
+                            {open && (estoqueOpen ? <ExpandLess /> : <ExpandMore />)}
+                        </ListItemButton>
+                        <Collapse in={estoqueOpen && open} timeout="auto" unmountOnExit>
+                            <List component="div" disablePadding>
+                                <ListItemButton component={Link} to="/produtos" sx={{ pl: 4 }}>
+                                    <ListItemText primary="Produtos" sx={textStyle('/produtos')} />
+                                </ListItemButton>
+                                <ListItemButton component={Link} to="/almoxarifados" sx={{ pl: 4 }}>
+                                    <ListItemText primary="Almoxarifados" sx={textStyle('/almoxarifados')} />
+                                </ListItemButton>
+                                <ListItemButton component={Link} to="/compras" sx={{ pl: 4 }}>
+                                    <ListItemText primary="Compras (NFe)" sx={textStyle('/compras')} />
+                                </ListItemButton>
+                            </List>
+                        </Collapse>
 
-  return (
-    <Box sx={{ display: 'flex' }}>
-      
-      {/* --- APP BAR (Topo) --- */}
-      <AppBar position="fixed" open={!isMobile && open}>
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            onClick={handleDrawerToggle}
-            edge="start"
-            sx={{ marginRight: 5 }}
-          >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            Plataforma de Gestão
-          </Typography>
-          <IconButton sx={{ ml: 1 }} onClick={colorMode.toggleColorMode} color="inherit">
-            {theme.palette.mode === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-          </IconButton>
-        </Toolbar>
-      </AppBar>
+                        {/* ================================================= */}
+                        {/* NOVO MENU FINANCEIRO */}
+                        {/* ================================================= */}
+                        <ListItemButton onClick={() => setFinanceiroOpen(!financeiroOpen)} sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                            <ListItemIcon sx={{ minWidth: '40px', color: '#5f6368' }}>
+                                <CircleDollarSign />
+                            </ListItemIcon>
+                            <ListItemText primary="Financeiro" sx={{ opacity: open ? 1 : 0 }} />
+                            {open && (financeiroOpen ? <ExpandLess /> : <ExpandMore />)}
+                        </ListItemButton>
+                        <Collapse in={financeiroOpen && open} timeout="auto" unmountOnExit>
+                            <List component="div" disablePadding>
+                                {/* Contas Bancárias (Nova Rota) */}
+                                <ListItemButton component={Link} to="/financeiro/contas" sx={{ pl: 4 }}>
+                                    <ListItemIcon sx={{ minWidth: '30px', color: isActive('/financeiro/contas') ? '#1976d2' : '#757575' }}>
+                                        <Landmark size={20} />
+                                    </ListItemIcon>
+                                    <ListItemText primary="Contas Bancárias" sx={textStyle('/financeiro/contas')} />
+                                </ListItemButton>
 
-      {/* --- MENU LATERAL (DRAWER) --- */}
-      
-      {/* Versão Mobile (Temporary) */}
-      {isMobile ? (
-          <MuiDrawer
-            variant="temporary"
-            open={mobileOpen}
-            onClose={handleDrawerToggle}
-            ModalProps={{ keepMounted: true }} // Melhor desempenho no mobile
-            sx={{
-                '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-            }}
-          >
-            <DrawerHeader>
-                 <Typography variant="h6" sx={{ ml: 2, fontWeight: 'bold' }}>Menu</Typography>
-                 <IconButton onClick={handleDrawerToggle}><ChevronLeft /></IconButton>
-            </DrawerHeader>
-            <Divider />
-            {drawerContent}
-          </MuiDrawer>
-      ) : (
-      /* Versão Desktop (Permanent Mini/Full) */
-          <DesktopDrawer variant="permanent" open={open}>
-            <DrawerHeader>
-                {/* Só mostra o título se estiver aberto */}
-                {open && <Typography variant="h6" sx={{ ml: 2, fontWeight: 'bold', flexGrow: 1 }}>Menu</Typography>}
-                <IconButton onClick={handleDrawerToggle}>
-                    {theme.direction === 'rtl' ? <ChevronRight /> : <ChevronLeft />}
-                </IconButton>
-            </DrawerHeader>
-            <Divider />
-            {drawerContent}
-          </DesktopDrawer>
-      )}
+                                {/* Extrato Geral (Nova Rota) */}
+                                <ListItemButton component={Link} to="/financeiro/historico" sx={{ pl: 4 }}>
+                                    <ListItemIcon sx={{ minWidth: '30px', color: isActive('/financeiro/historico') ? '#1976d2' : '#757575' }}>
+                                        <History size={20} />
+                                    </ListItemIcon>
+                                    <ListItemText primary="Extrato Geral" sx={textStyle('/financeiro/historico')} />
+                                </ListItemButton>
 
-      {/* --- CONTEÚDO PRINCIPAL DA PÁGINA --- */}
-      <Box component="main" sx={{ flexGrow: 1, p: 3, width: '100%', overflowX: 'hidden' }}>
-        <DrawerHeader /> {/* Espaçador para não ficar atrás da AppBar */}
-        <Outlet />
-      </Box>
-    </Box>
-  );
-};
+                                {/* Links Antigos (Opcional - Mantenha se ainda usar) */}
+                                <ListItemButton component={Link} to="/financeiro/contas-a-pagar" sx={{ pl: 4 }}>
+                                    <ListItemIcon sx={{ minWidth: '30px' }}><TrendingDown size={20} /></ListItemIcon>
+                                    <ListItemText primary="Contas a Pagar" sx={textStyle('/financeiro/contas-a-pagar')} />
+                                </ListItemButton>
+                                <ListItemButton component={Link} to="/financeiro/contas-a-receber" sx={{ pl: 4 }}>
+                                    <ListItemIcon sx={{ minWidth: '30px' }}><TrendingUp size={20} /></ListItemIcon>
+                                    <ListItemText primary="Contas a Receber" sx={textStyle('/financeiro/contas-a-receber')} />
+                                </ListItemButton>
+                            </List>
+                        </Collapse>
 
-export default MainLayout;
+                        <Divider sx={{ my: 1 }} />
+
+                        {/* Cadastros Gerais */}
+                        <ListItem disablePadding sx={{ display: 'block' }}>
+                            <ListItemButton component={Link} to="/clientes" sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                                <ListItemIcon sx={iconStyle('/clientes')}>
+                                    <Users />
+                                </ListItemIcon>
+                                <ListItemText primary="Clientes" sx={{ opacity: open ? 1 : 0, ...textStyle('/clientes') }} />
+                            </ListItemButton>
+                        </ListItem>
+                         <ListItem disablePadding sx={{ display: 'block' }}>
+                            <ListItemButton component={Link} to="/fornecedores" sx={{ justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                                <ListItemIcon sx={iconStyle('/fornecedores')}>
+                                    <Users />
+                                </ListItemIcon>
+                                <ListItemText primary="Fornecedores" sx={{ opacity: open ? 1 : 0, ...textStyle('/fornecedores') }} />
+                            </ListItemButton>
+                        </ListItem>
+
+                    </List>
+                </Box>
+            </Drawer>
+
+            {/* Main Content Area */}
+            <Box component="main" sx={{ flexGrow: 1, p: 3, width: `calc(100% - ${open ? drawerWidth : 72}px)` }}>
+                <Toolbar /> {/* Espaçador para o conteúdo não ficar embaixo da AppBar */}
+                <Outlet />
+            </Box>
+        </Box>
+    );
+}

@@ -16,6 +16,7 @@ import PlanoDeContas from './pages/PlanoDeContas';
 import PDV from './pages/PDV';
 import TerminalBalcao from './pages/TerminalBalcao';
 import Categorias from './pages/Categorias';
+import HistoricoMovimentacoes from './pages/HistoricoMovimentacoes';
 
 // --- NOVOS IMPORTS ---
 import Almoxarifados from './pages/Almoxarifados';   // A nova página CRUD
@@ -111,6 +112,7 @@ function App() {
             <Route path="financeiro/contas-a-pagar" element={<ContasAPagar />} />
             <Route path="financeiro/contas-a-receber" element={<ContasAReceber />} />
             <Route path="financeiro/plano-de-contas" element={<PlanoDeContas />} />
+            <Route path="/financeiro/historico" element={<HistoricoMovimentacoes />} />
             
             <Route path="/terminal-balcao" element={<TerminalBalcao />} />
 

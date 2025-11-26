@@ -351,6 +351,186 @@ app.post('/caixa/fechar', async (req, res) => {
     }
 });
 
+// 1. Criação de Conta Bancária
+app.post('/contas-bancarias', async (req, res) => {
+    const { nome_conta, banco, saldo_inicial, tipo_conta } = req.body;
+
+    // Validação dos campos obrigatórios
+    if (!nome_conta || !banco || saldo_inicial === undefined || !tipo_conta) {
+        return res.status(400).json({ message: 'Todos os campos são obrigatórios.' });
+    }
+
+    // Validação do tipo de conta
+    const tiposPermitidos = ['Conta Corrente', 'Poupança', 'Carteira', 'Cofre', 'Caixa'];
+    if (!tiposPermitidos.includes(tipo_conta)) {
+        return res.status(400).json({ message: 'Tipo de conta inválido.' });
+    }
+
+    try {
+        const query = `
+            INSERT INTO contas_bancarias (nome_conta, banco, saldo, tipo_conta)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `;
+        const values = [nome_conta, banco, saldo_inicial, tipo_conta];
+        
+        const result = await pool.query(query, values);
+        res.status(201).json({ 
+            message: 'Conta bancária criada com sucesso!', 
+            conta: result.rows[0] 
+        });
+    } catch (err) {
+        console.error('Erro ao criar conta bancária:', err.message);
+        res.status(500).json({ message: 'Erro no servidor', error: err.message });
+    }
+});
+
+// 2. Transferência Entre Contas (com Atualização Dinâmica de Saldo)
+app.post('/transferencias', async (req, res) => {
+    const { conta_origem_id, conta_destino_id, valor, observacao } = req.body;
+
+    if (!conta_origem_id || !conta_destino_id || !valor) {
+        return res.status(400).json({ message: 'Contas de origem, destino e valor são obrigatórios.' });
+    }
+
+    if (conta_origem_id === conta_destino_id) {
+        return res.status(400).json({ message: 'A conta de origem e destino não podem ser as mesmas.' });
+    }
+
+    if (valor <= 0) {
+        return res.status(400).json({ message: 'O valor da transferência deve ser positivo.' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+        // Inicia a transação (Atomicidade)
+        await client.query('BEGIN');
+
+        // 1. Verificar saldo da conta de origem (Bloqueando a linha para evitar concorrência - FOR UPDATE)
+        const resOrigem = await client.query('SELECT saldo FROM contas_bancarias WHERE id = $1 FOR UPDATE', [conta_origem_id]);
+        
+        if (resOrigem.rowCount === 0) {
+            throw new Error('Conta de origem não encontrada.');
+        }
+
+        const saldoAtual = parseFloat(resOrigem.rows[0].saldo);
+
+        if (saldoAtual < valor) {
+            // Rollback imediato se não houver saldo
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'Saldo insuficiente na conta de origem.' });
+        }
+
+        // 2. Debitar da conta de origem
+        await client.query('UPDATE contas_bancarias SET saldo = saldo - $1 WHERE id = $2', [valor, conta_origem_id]);
+
+        // 3. Creditar na conta de destino
+        const resDestino = await client.query('UPDATE contas_bancarias SET saldo = saldo + $1 WHERE id = $2 RETURNING id', [valor, conta_destino_id]);
+        
+        if (resDestino.rowCount === 0) {
+            throw new Error('Conta de destino não encontrada.');
+        }
+
+        // 4. Registrar histórico da transferência
+        const insertHist = `
+            INSERT INTO transferencias (conta_origem_id, conta_destino_id, valor, observacao)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+        `;
+        const resultTransferencia = await client.query(insertHist, [conta_origem_id, conta_destino_id, valor, observacao]);
+
+        // Confirma a transação
+        await client.query('COMMIT');
+
+        res.status(201).json({ 
+            message: 'Transferência realizada com sucesso!', 
+            detalhes: resultTransferencia.rows[0] 
+        });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Erro na transferência:', err.message);
+        
+        // Retorna erro específico se for uma das nossas validações manuais
+        if (err.message === 'Conta de origem não encontrada.' || err.message === 'Conta de destino não encontrada.') {
+            res.status(404).json({ message: err.message });
+        } else {
+            res.status(500).json({ message: 'Erro ao processar transferência', error: err.message });
+        }
+    } finally {
+        client.release();
+    }
+});
+
+// Rota auxiliar para ver extrato de transferências (Opcional)
+app.get('/transferencias', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                t.id, t.valor, t.data_transferencia, t.observacao,
+                co.nome_conta as origem_nome,
+                cd.nome_conta as destino_nome
+            FROM transferencias t
+            JOIN contas_bancarias co ON t.conta_origem_id = co.id
+            JOIN contas_bancarias cd ON t.conta_destino_id = cd.id
+            ORDER BY t.data_transferencia DESC
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Erro ao buscar transferências:', err.message);
+        res.status(500).json({ message: 'Erro no servidor', error: err.message });
+    }
+});
+
+// ==========================================================
+// ROTA: EXTRATO UNIFICADO (Histórico Completo)
+// Une: Receitas Recebidas + Despesas Pagas + Transferências
+// ==========================================================
+app.get('/movimentacoes', async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                'lancamento' as origem_dado,
+                lf.id,
+                lf.data_pagamento as data,
+                lf.descricao,
+                lf.valor,
+                lf.tipo, -- 'Entrada' ou 'Saída'
+                cb.nome_conta as conta,
+                lf.categoria_id, -- Caso queira mostrar categoria
+                lf.status
+            FROM lancamentos_financeiros lf
+            LEFT JOIN contas_bancarias cb ON lf.conta_bancaria_id = cb.id
+            WHERE lf.status IN ('Pago', 'Recebido') -- Apenas o que realmente aconteceu (Cash Flow)
+            
+            UNION ALL
+            
+            SELECT 
+                'transferencia' as origem_dado,
+                t.id,
+                t.data_transferencia as data,
+                COALESCE(NULLIF(t.observacao, ''), 'Transferência entre contas') as descricao,
+                t.valor,
+                'Transferência' as tipo,
+                CONCAT(co.nome_conta, ' ➜ ', cd.nome_conta) as conta,
+                NULL as categoria_id,
+                'Concluído' as status
+            FROM transferencias t
+            JOIN contas_bancarias co ON t.conta_origem_id = co.id
+            JOIN contas_bancarias cd ON t.conta_destino_id = cd.id
+
+            ORDER BY data DESC
+        `;
+        
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Erro ao buscar histórico unificado:', err.message);
+        res.status(500).json({ message: 'Erro no servidor', error: err.message });
+    }
+});
 
 app.listen(PORT, () => {
   console.log(`Serviço Financeiro rodando na porta ${PORT}`);
